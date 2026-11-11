@@ -1,0 +1,9 @@
+{
+  "appId": "ru.multitool.blockblast",
+  "appName": "Block Blast",
+  "webDir": "www",
+  "backgroundColor": "#150a2b",
+  "android": {
+    "allowMixedContent": false
+  }
+}

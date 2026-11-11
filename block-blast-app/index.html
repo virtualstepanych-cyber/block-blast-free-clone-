@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#150a2b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Block Blast — головоломка</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --bg1: #150a2b;
+    --bg2: #2a0d4f;
+    --bg3: #0d0620;
+    --ink: #f6f1ff;
+    --muted: #b9a9e0;
+    --card: rgba(255, 255, 255, .06);
+    --tb: 21px;
+  }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: "Segoe UI", "Trebuchet MS", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    background: radial-gradient(120% 90% at 50% -10%, #3b1270 0%, var(--bg2) 38%, var(--bg1) 68%, var(--bg3) 100%);
+    display: grid;
+    place-items: center;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+
+  .bg { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+  .bg span {
+    position: absolute;
+    width: 46vmax;
+    height: 46vmax;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: .45;
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  .bg span:nth-child(1) { left: -18vmax; top: -14vmax; background: #ff2d75; }
+  .bg span:nth-child(2) { right: -20vmax; top: 22vh; background: #2b7bff; animation-delay: -6s; }
+  .bg span:nth-child(3) { left: 12vw; bottom: -24vmax; background: #00e5a8; animation-delay: -11s; }
+
+  @keyframes drift {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to { transform: translate3d(4vw, -5vh, 0) scale(1.18); }
+  }
+
+  .game {
+    position: relative;
+    z-index: 1;
+    width: min(100vw, 480px);
+    height: 100%;
+    max-height: 100dvh;
+    padding: max(10px, env(safe-area-inset-top)) 16px max(10px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ---------- HUD ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 2px 0;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 86px;
+  }
+  .stat .lbl {
+    font-size: 10px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .stat b {
+    font-size: clamp(22px, 7vw, 30px);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 18px rgba(180, 140, 255, .55);
+  }
+  .stat.end { align-items: flex-end; text-align: right; }
+  .stat.end b { color: #ffd66b; text-shadow: 0 0 18px rgba(255, 190, 70, .5); }
+
+  .combo-pill {
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    color: #2a0b00;
+    background: linear-gradient(135deg, #ffe066, #ff9f1c);
+    box-shadow: 0 6px 18px rgba(255, 150, 30, .45);
+    opacity: 0;
+    transform: scale(.6) translateY(6px);
+    transition: opacity .2s, transform .25s cubic-bezier(.2, 1.6, .4, 1);
+  }
+  .combo-pill.show { opacity: 1; transform: scale(1) translateY(0); }
+
+  /* ---------- Board ---------- */
+  .board-wrap {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+
+  .board {
+    width: 100%;
+    max-width: min(100%, calc(100dvh - 300px));
+    aspect-ratio: 1 / 1;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    gap: 2.4%;
+    padding: 3.4%;
+    border-radius: 26px;
+    background:
+      linear-gradient(160deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .02)),
+      rgba(12, 5, 28, .55);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .16),
+      inset 0 -1px 0 rgba(0, 0, 0, .35),
+      0 22px 50px -18px rgba(0, 0, 0, .85);
+    backdrop-filter: blur(6px);
+    position: relative;
+  }
+  .board.shake { animation: shake .34s cubic-bezier(.36, .07, .19, .97); }
+  @keyframes shake {
+    10%, 90% { transform: translate(-1px, 0) rotate(-.15deg); }
+    20%, 80% { transform: translate(2px, 0) rotate(.2deg); }
+    30%, 50%, 70% { transform: translate(-3px, 0) rotate(-.25deg); }
+    40%, 60% { transform: translate(3px, 0) rotate(.25deg); }
+  }
+
+  .cell {
+    position: relative;
+    border-radius: 24%;
+    background: rgba(255, 255, 255, .055);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .038);
+  }
+
+  .cell .fill {
+    position: absolute;
+    inset: 0;
+    border-radius: 24%;
+    background: linear-gradient(155deg, var(--c1), var(--c2));
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, .55),
+      inset 0 -3px 0 rgba(0, 0, 0, .22),
+      0 3px 7px rgba(0, 0, 0, .32);
+    opacity: 0;
+    transform: scale(.4);
+    transition: opacity .12s ease-out, transform .12s ease-out;
+  }
+  .cell .fill::after {
+    content: "";
+    position: absolute;
+    left: 13%;
+    top: 9%;
+    width: 74%;
+    height: 34%;
+    border-radius: 50%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .58), rgba(255, 255, 255, 0));
+  }
+  .cell.filled .fill { opacity: 1; transform: scale(1); }
+  .cell.pop .fill { animation: pop .24s cubic-bezier(.2, 1.6, .4, 1); }
+  @keyframes pop {
+    0% { transform: scale(.55); }
+    65% { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+
+  .cell.hint .fill {
+    inset: 8%;
+    opacity: .42;
+    transform: scale(1);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55);
+  }
+  .cell.hint.bad .fill {
+    background: linear-gradient(155deg, #ff3b5c, #ff7a8a);
+    opacity: .3;
+  }
+
+  .cell.boom .fill {
+    animation: boom .32s ease-out forwards;
+  }
+  @keyframes boom {
+    0% { transform: scale(1); filter: brightness(1); }
+    35% { transform: scale(1.22); filter: brightness(2.4) saturate(1.4); }
+    100% { transform: scale(0); opacity: 0; filter: brightness(3); }
+  }
+
+  .toast {
+    position: absolute;
+    left: 50%;
+    top: 42%;
+    transform: translate(-50%, -50%);
+    font-size: clamp(26px, 9vw, 42px);
+    font-weight: 900;
+    letter-spacing: .04em;
+    color: #fff;
+    text-shadow: 0 0 24px rgba(255, 220, 120, .9), 0 0 60px rgba(255, 130, 60, .7);
+    pointer-events: none;
+    opacity: 0;
+  }
+  .toast.go { animation: toastUp .9s ease-out forwards; }
+  @keyframes toastUp {
+    0% { opacity: 0; transform: translate(-50%, -35%) scale(.6); }
+    25% { opacity: 1; transform: translate(-50%, -55%) scale(1.1); }
+    60% { opacity: 1; transform: translate(-50%, -65%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -110%) scale(.95); }
+  }
+
+  /* ---------- Tray ---------- */
+  .tray {
+    flex: 1 1 auto;
+    min-height: calc(var(--tb) * 5 + 16px);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    align-items: center;
+    padding: 6px 0;
+  }
+
+  .slot {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: 100%;
+    border-radius: 18px;
+    transition: background .2s;
+  }
+  .slot:active { background: rgba(255, 255, 255, .04); }
+
+  .piece {
+    position: relative;
+    transition: transform .18s ease, opacity .18s ease;
+  }
+  .piece.dragging { opacity: .22; }
+
+  .mini {
+    position: absolute;
+    border-radius: 24%;
+    background: linear-gradient(155deg, var(--c1), var(--c2));
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, .5),
+      inset 0 -2px 0 rgba(0, 0, 0, .22),
+      0 2px 5px rgba(0, 0, 0, .3);
+  }
+  .mini::after {
+    content: "";
+    position: absolute;
+    left: 13%;
+    top: 9%;
+    width: 74%;
+    height: 34%;
+    border-radius: 50%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0));
+  }
+
+  /* ---------- Ghost while dragging ---------- */
+  .ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 80;
+    pointer-events: none;
+    will-change: transform;
+    filter: drop-shadow(0 14px 20px rgba(0, 0, 0, .5));
+  }
+  .ghost .mini { position: absolute; }
+
+  /* ---------- Buttons ---------- */
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex: 0 0 auto;
+  }
+  .btn {
+    flex: 1;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 16px;
+    font: inherit;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: .04em;
+    color: var(--ink);
+    background: rgba(255, 255, 255, .09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 6px 16px rgba(0, 0, 0, .3);
+    cursor: pointer;
+    transition: transform .12s, background .2s;
+  }
+  .btn:active { transform: scale(.97); background: rgba(255, 255, 255, .15); }
+  .btn.off { opacity: .5; }
+
+  /* ---------- Overlay ---------- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 22px;
+    background: rgba(10, 4, 24, .72);
+    backdrop-filter: blur(10px);
+    animation: fade .25s ease-out;
+  }
+  .overlay[hidden] { display: none; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  .card {
+    width: min(100%, 340px);
+    padding: 26px 22px 22px;
+    border-radius: 26px;
+    text-align: center;
+    background: linear-gradient(165deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .3),
+      0 30px 60px -20px rgba(0, 0, 0, .9);
+    border: 1px solid rgba(255, 255, 255, .12);
+  }
+  .card h2 {
+    margin: 0 0 6px;
+    font-size: 22px;
+    letter-spacing: .02em;
+  }
+  .card .big {
+    margin: 6px 0 0;
+    font-size: 54px;
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, #ffe066, #ff7a8a 55%, #b28bff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .card .sub {
+    margin: 10px 0 22px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .card .sub b { color: #ffd66b; }
+  .btn.primary {
+    width: 100%;
+    padding: 15px;
+    font-size: 15px;
+    color: #2a0b00;
+    background: linear-gradient(135deg, #ffe066, #ff9f1c);
+    box-shadow: 0 12px 26px -8px rgba(255, 160, 40, .8);
+  }
+  .btn.primary:active { background: linear-gradient(135deg, #ffd633, #ff9000); }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .footnote {
+    margin: 10px 0 0;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: rgba(200, 180, 240, .45);
+  }
+
+  @media (max-height: 640px) {
+    .footnote { display: none; }
+    .tray { min-height: calc(var(--tb) * 5); }
+  }
+</style>
+
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23150a2b'/%3E%3Crect x='12' y='12' width='17' height='17' rx='5' fill='%23ff4d6d'/%3E%3Crect x='35' y='12' width='17' height='17' rx='5' fill='%23ffb703'/%3E%3Crect x='12' y='35' width='17' height='17' rx='5' fill='%2306d6a0'/%3E%3Crect x='35' y='35' width='17' height='17' rx='5' fill='%237b61ff'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="bg" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<main class="game">
+  <h1 class="sr-only">Block Blast — головоломка с блоками</h1>
+  <div class="topbar">
+    <div class="stat">
+      <span class="lbl">Счёт</span>
+      <b id="score">0</b>
+    </div>
+    <div class="combo-pill" id="comboPill">КОМБО x2</div>
+    <div class="stat end">
+      <span class="lbl">Рекорд</span>
+      <b id="best">0</b>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board" id="board" role="application" aria-label="Игровое поле 8 на 8"></div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <div class="tray" id="tray" aria-label="Фигуры"></div>
+
+  <div class="controls">
+    <button class="btn" id="restart" type="button">Новая игра</button>
+    <button class="btn" id="sound" type="button" aria-pressed="true">Звук вкл</button>
+  </div>
+  <p class="footnote">Перетаскивай фигуры · собирай линии</p>
+</main>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="card">
+    <h2 id="overTitle">Игра окончена</h2>
+    <p class="big" id="finalScore">0</p>
+    <p class="sub" id="finalNote">Рекорд: 0</p>
+    <button class="btn primary" id="again" type="button">Играть снова</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const N = 8;
+  const COLORS = [
+    ["#ff4d6d", "#ff8fab"],
+    ["#ffb703", "#ffd166"],
+    ["#06d6a0", "#3ff0be"],
+    ["#4cc9f0", "#8ef0ff"],
+    ["#7b61ff", "#b29bff"],
+    ["#ff6b35", "#ffa94d"],
+    ["#f72585", "#ff6ec7"]
+  ];
+
+  const RAW_SHAPES = [
+    ["X"],
+    ["XX"],
+    ["X", "X"],
+    ["XXX"],
+    ["X", "X", "X"],
+    ["XXXX"],
+    ["X", "X", "X", "X"],
+    ["XXXXX"],
+    ["X", "X", "X", "X", "X"],
+    ["XX", "XX"],
+    ["XXX", "XXX"],
+    ["XXX", "XXX", "XXX"],
+    ["XX", "XX", "XX"],
+    ["X.", "XX"],
+    ["XX", "X."],
+    [".X", "XX"],
+    ["XX", ".X"],
+    ["XXX", "X.."],
+    ["XXX", "..X"],
+    ["X..", "XXX"],
+    ["..X", "XXX"],
+    ["X.", "X.", "XX"],
+    ["XX", "X.", "X."],
+    ["XX", ".X", ".X"],
+    [".X", ".X", "XX"],
+    ["XXX", ".X."],
+    [".X.", "XXX"],
+    ["X.", "XX", "X."],
+    [".X", "XX", ".X"],
+    ["XX.", ".XX"],
+    [".XX", "XX."],
+    ["X.", "XX", ".X"],
+    [".X", "XX", "X."],
+    ["X.X", "XXX"],
+    ["XXX", "X.X"]
+  ];
+
+  const SHAPES = RAW_SHAPES.map(function (rows) {
+    const width = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 0);
+    const cells = [];
+    rows.forEach(function (row, r) {
+      for (let c = 0; c < width; c++) {
+        if (row[c] === "X") cells.push([r, c]);
+      }
+    });
+    return { w: width, h: rows.length, cells: cells };
+  });
+
+  const boardEl = document.getElementById("board");
+  const trayEl = document.getElementById("tray");
+  const scoreEl = document.getElementById("score");
+  const bestEl = document.getElementById("best");
+  const comboPill = document.getElementById("comboPill");
+  const toastEl = document.getElementById("toast");
+  const overlay = document.getElementById("overlay");
+  const finalScoreEl = document.getElementById("finalScore");
+  const finalNoteEl = document.getElementById("finalNote");
+  const overTitleEl = document.getElementById("overTitle");
+  const againBtn = document.getElementById("again");
+  const restartBtn = document.getElementById("restart");
+  const soundBtn = document.getElementById("sound");
+
+  const cellEls = [];
+  for (let r = 0; r < N; r++) {
+    const row = [];
+    for (let c = 0; c < N; c++) {
+      const d = document.createElement("div");
+      d.className = "cell";
+      d.innerHTML = '<i class="fill"></i>';
+      boardEl.appendChild(d);
+      row.push(d);
+    }
+    cellEls.push(row);
+  }
+
+  const state = {
+    grid: emptyGrid(),
+    pieces: [null, null, null],
+    score: 0,
+    best: 0,
+    combo: 0,
+    playing: true,
+    busy: false,
+    newRecord: false
+  };
+
+  let M = { s: 40, gap: 4, pitch: 44, left: 0, top: 0 };
+  let drag = null;
+  let ghostEl = null;
+  let uid = 0;
+
+  function emptyGrid() {
+    const g = [];
+    for (let r = 0; r < N; r++) g.push(new Array(N).fill(null));
+    return g;
+  }
+
+  /* ---------- storage ---------- */
+  function loadBest() {
+    try {
+      const v = parseInt(localStorage.getItem("bb_best") || "0", 10);
+      return isFinite(v) && v > 0 ? v : 0;
+    } catch (e) { return 0; }
+  }
+  function saveBest(v) {
+    try { localStorage.setItem("bb_best", String(v)); } catch (e) {}
+  }
+
+  /* ---------- sound ---------- */
+  let audioCtx = null;
+  let soundOn = true;
+  function ctx() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, dur, type, vol, delay) {
+    if (!soundOn) return;
+    const c = ctx();
+    if (!c) return;
+    const t = c.currentTime + (delay || 0);
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(vol || 0.06, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + (dur || 0.12));
+    osc.connect(gain).connect(c.destination);
+    osc.start(t);
+    osc.stop(t + (dur || 0.12) + 0.03);
+  }
+  function sfxPlace() { tone(430, 0.09, "triangle", 0.05); }
+  function sfxClear(lines, combo) {
+    const base = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+    const n = Math.min(2 + lines, 5);
+    for (let i = 0; i < n; i++) {
+      tone(base[i] * (1 + (combo - 1) * 0.06), 0.16, "sine", 0.055, i * 0.055);
+    }
+  }
+  function sfxOver() {
+    tone(330, 0.22, "sine", 0.06, 0);
+    tone(246.94, 0.28, "sine", 0.055, 0.14);
+    tone(164.81, 0.5, "sine", 0.05, 0.3);
+  }
+
+  /* ---------- helpers ---------- */
+  function setColors(el, color) {
+    el.style.setProperty("--c1", COLORS[color][0]);
+    el.style.setProperty("--c2", COLORS[color][1]);
+  }
+
+  function renderGrid() {
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        const v = state.grid[r][c];
+        const el = cellEls[r][c];
+        el.className = "cell";
+        if (v === null) {
+          el.style.removeProperty("--c1");
+          el.style.removeProperty("--c2");
+        } else {
+          setColors(el, v);
+          el.classList.add("filled");
+        }
+      }
+    }
+  }
+
+  function paintCell(r, c, color, pop) {
+    const el = cellEls[r][c];
+    setColors(el, color);
+    el.className = "cell filled";
+    if (pop) {
+      void el.offsetWidth;
+      el.classList.add("pop");
+      setTimeout(function () { el.classList.remove("pop"); }, 260);
+    }
+  }
+
+  function fits(piece, r, c) {
+    for (let i = 0; i < piece.cells.length; i++) {
+      const rr = r + piece.cells[i][0];
+      const cc = c + piece.cells[i][1];
+      if (rr < 0 || cc < 0 || rr >= N || cc >= N) return false;
+      if (state.grid[rr][cc] !== null) return false;
+    }
+    return true;
+  }
+
+  function fitsAnywhere(piece) {
+    for (let r = 0; r <= N - piece.h; r++) {
+      for (let c = 0; c <= N - piece.w; c++) {
+        if (fits(piece, r, c)) return true;
+      }
+    }
+    return false;
+  }
+
+  /* ---------- pieces ---------- */
+  function makePiece() {
+    const shape = SHAPES[(Math.random() * SHAPES.length) | 0];
+    return {
+      id: ++uid,
+      w: shape.w,
+      h: shape.h,
+      cells: shape.cells,
+      color: (Math.random() * COLORS.length) | 0
+    };
+  }
+
+  function refill() {
+    state.pieces = [makePiece(), makePiece(), makePiece()];
+    if (!state.pieces.some(fitsAnywhere)) {
+      for (let attempt = 0; attempt < 80; attempt++) {
+        const p = makePiece();
+        if (fitsAnywhere(p)) {
+          state.pieces[(Math.random() * 3) | 0] = p;
+          break;
+        }
+      }
+    }
+    renderTray();
+  }
+
+  function trayCell() {
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--tb")) || 21;
+  }
+
+  function renderTray() {
+    trayEl.innerHTML = "";
+    const tb = trayCell();
+    for (let i = 0; i < 3; i++) {
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      slot.dataset.slot = String(i);
+      const p = state.pieces[i];
+      if (p) {
+        const gap = Math.max(2, Math.round(tb * 0.09));
+        const pieceEl = document.createElement("div");
+        pieceEl.className = "piece";
+        pieceEl.style.width = (p.w * tb + (p.w - 1) * gap) + "px";
+        pieceEl.style.height = (p.h * tb + (p.h - 1) * gap) + "px";
+        for (let k = 0; k < p.cells.length; k++) {
+          const cell = p.cells[k];
+          const b = document.createElement("i");
+          b.className = "mini";
+          b.style.width = tb + "px";
+          b.style.height = tb + "px";
+          b.style.left = (cell[1] * (tb + gap)) + "px";
+          b.style.top = (cell[0] * (tb + gap)) + "px";
+          b.style.setProperty("--c1", COLORS[p.color][0]);
+          b.style.setProperty("--c2", COLORS[p.color][1]);
+          pieceEl.appendChild(b);
+        }
+        slot.appendChild(pieceEl);
+      }
+      trayEl.appendChild(slot);
+    }
+  }
+
+  /* ---------- measuring ---------- */
+  function measure() {
+    const r0 = cellEls[0][0].getBoundingClientRect();
+    const r1 = cellEls[0][1].getBoundingClientRect();
+    M.s = r0.width;
+    M.gap = r1.left - r0.right;
+    M.pitch = M.s + M.gap;
+    M.left = r0.left;
+    M.top = r0.top;
+    const tb = Math.round(Math.min(26, Math.max(13, M.s * 0.5)));
+    document.documentElement.style.setProperty("--tb", tb + "px");
+  }
+
+  /* ---------- preview ---------- */
+  function clearHints() {
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        cellEls[r][c].classList.remove("hint", "bad");
+      }
+    }
+  }
+
+  function showHints(piece, r, c, ok) {
+    clearHints();
+    for (let i = 0; i < piece.cells.length; i++) {
+      const rr = r + piece.cells[i][0];
+      const cc = c + piece.cells[i][1];
+      if (rr < 0 || cc < 0 || rr >= N || cc >= N) continue;
+      const el = cellEls[rr][cc];
+      setColors(el, piece.color);
+      el.classList.add("hint");
+      if (!ok) el.classList.add("bad");
+    }
+  }
+
+  /* ---------- drag ---------- */
+  function buildGhost(piece) {
+    const el = document.createElement("div");
+    el.className = "ghost";
+    const gap = M.gap;
+    for (let k = 0; k < piece.cells.length; k++) {
+      const cell = piece.cells[k];
+      const b = document.createElement("i");
+      b.className = "mini";
+      b.style.width = M.s + "px";
+      b.style.height = M.s + "px";
+      b.style.left = (cell[1] * (M.s + gap)) + "px";
+      b.style.top = (cell[0] * (M.s + gap)) + "px";
+      b.style.setProperty("--c1", COLORS[piece.color][0]);
+      b.style.setProperty("--c2", COLORS[piece.color][1]);
+      el.appendChild(b);
+    }
+    return el;
+  }
+
+  function onDown(e) {
+    if (drag || state.busy || !state.playing) return;
+    const slot = e.target.closest(".slot");
+    if (!slot) return;
+    const idx = parseInt(slot.dataset.slot, 10);
+    const piece = state.pieces[idx];
+    const pieceEl = slot.querySelector(".piece");
+    if (!piece || !pieceEl) return;
+
+    e.preventDefault();
+    ctx();
+    measure();
+
+    const rect = pieceEl.getBoundingClientRect();
+    drag = {
+      idx: idx,
+      piece: piece,
+      fx: (e.clientX - rect.left) / rect.width,
+      fy: (e.clientY - rect.top) / rect.height,
+      r: -1,
+      c: -1,
+      ok: false
+    };
+    pieceEl.classList.add("dragging");
+    ghostEl = buildGhost(piece);
+    document.body.appendChild(ghostEl);
+    moveDrag(e);
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
+  function moveDrag(e) {
+    const piece = drag.piece;
+    const gap = M.gap;
+    const gw = piece.w * M.s + (piece.w - 1) * gap;
+    const gh = piece.h * M.s + (piece.h - 1) * gap;
+
+    let x = e.clientX - drag.fx * gw;
+    let y = e.clientY - drag.fy * gh;
+    if (e.pointerType === "touch") y -= M.pitch * 0.95;
+
+    ghostEl.style.transform = "translate3d(" + x + "px," + y + "px,0)";
+
+    const c = Math.round((x - M.left) / M.pitch);
+    const r = Math.round((y - M.top) / M.pitch);
+    const ok = fits(piece, r, c);
+    drag.r = r;
+    drag.c = c;
+    drag.ok = ok;
+
+    if (r > -piece.h && r < N && c > -piece.w && c < N) {
+      showHints(piece, r, c, ok);
+    } else {
+      clearHints();
+    }
+  }
+
+  function onMove(e) {
+    if (!drag) return;
+    e.preventDefault();
+    moveDrag(e);
+  }
+
+  function onUp() {
+    if (!drag) return;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+    clearHints();
+    if (ghostEl && ghostEl.parentNode) ghostEl.parentNode.removeChild(ghostEl);
+    ghostEl = null;
+
+    const d = drag;
+    drag = null;
+
+    if (d.ok) {
+      placePiece(d.idx, d.piece, d.r, d.c);
+    } else {
+      renderTray();
+    }
+  }
+
+  /* ---------- game flow ---------- */
+  function addScore(n) {
+    state.score += n;
+    scoreEl.textContent = state.score;
+    if (state.score > state.best) {
+      state.best = state.score;
+      state.newRecord = true;
+      bestEl.textContent = state.best;
+      saveBest(state.best);
+    }
+  }
+
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.remove("go");
+    void toastEl.offsetWidth;
+    toastEl.classList.add("go");
+  }
+
+  function updateCombo() {
+    if (state.combo >= 2) {
+      comboPill.textContent = "КОМБО x" + state.combo;
+      comboPill.classList.add("show");
+    } else {
+      comboPill.classList.remove("show");
+    }
+  }
+
+  function placePiece(idx, piece, r, c) {
+    state.pieces[idx] = null;
+    for (let i = 0; i < piece.cells.length; i++) {
+      const rr = r + piece.cells[i][0];
+      const cc = c + piece.cells[i][1];
+      state.grid[rr][cc] = piece.color;
+      paintCell(rr, cc, piece.color, true);
+    }
+    addScore(piece.cells.length);
+    sfxPlace();
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} }
+    renderTray();
+
+    const rows = [];
+    const cols = [];
+    for (let i = 0; i < N; i++) {
+      if (state.grid[i].every(function (v) { return v !== null; })) rows.push(i);
+    }
+    for (let j = 0; j < N; j++) {
+      let full = true;
+      for (let i = 0; i < N; i++) {
+        if (state.grid[i][j] === null) { full = false; break; }
+      }
+      if (full) cols.push(j);
+    }
+
+    if (rows.length || cols.length) {
+      clearLines(rows, cols);
+    } else {
+      state.combo = 0;
+      updateCombo();
+      afterMove();
+    }
+  }
+
+  function clearLines(rows, cols) {
+    state.busy = true;
+    const affected = new Set();
+    rows.forEach(function (r) { for (let c = 0; c < N; c++) affected.add(r * N + c); });
+    cols.forEach(function (c) { for (let r = 0; r < N; r++) affected.add(r * N + c); });
+
+    affected.forEach(function (k) {
+      cellEls[(k / N) | 0][k % N].classList.add("boom");
+    });
+
+    const lines = rows.length + cols.length;
+    state.combo = Math.min(state.combo + 1, 9);
+    updateCombo();
+
+    const gain = lines * 100 * state.combo + (lines > 1 ? (lines - 1) * 60 : 0);
+    addScore(gain);
+    sfxClear(lines, state.combo);
+
+    if (lines > 1) {
+      boardEl.classList.remove("shake");
+      void boardEl.offsetWidth;
+      boardEl.classList.add("shake");
+    }
+    toast("+" + gain + (lines > 1 ? "  x" + lines : ""));
+
+    setTimeout(function () {
+      affected.forEach(function (k) {
+        const r = (k / N) | 0;
+        const c = k % N;
+        state.grid[r][c] = null;
+        const el = cellEls[r][c];
+        el.className = "cell";
+        el.style.removeProperty("--c1");
+        el.style.removeProperty("--c2");
+      });
+      state.busy = false;
+      afterMove();
+    }, 300);
+  }
+
+  function afterMove() {
+    if (state.pieces.every(function (p) { return p === null; })) {
+      refill();
+    }
+    const alive = state.pieces.some(function (p) { return p && fitsAnywhere(p); });
+    if (!alive) gameOver();
+  }
+
+  function gameOver() {
+    state.playing = false;
+    state.busy = false;
+    sfxOver();
+    if (state.score > state.best) {
+      state.best = state.score;
+      saveBest(state.best);
+    }
+    bestEl.textContent = state.best;
+    finalScoreEl.textContent = state.score;
+    finalNoteEl.innerHTML = state.newRecord
+      ? "Новый рекорд! Так держать."
+      : "Рекорд: <b>" + state.best + "</b>";
+    overTitleEl.textContent = "Игра окончена";
+    overlay.hidden = false;
+    againBtn.focus({ preventScroll: true });
+  }
+
+  function startGame() {
+    state.grid = emptyGrid();
+    state.pieces = [null, null, null];
+    state.score = 0;
+    state.combo = 0;
+    state.playing = true;
+    state.busy = false;
+    state.newRecord = false;
+    scoreEl.textContent = "0";
+    bestEl.textContent = state.best;
+    comboPill.classList.remove("show");
+    overlay.hidden = true;
+    clearHints();
+    renderGrid();
+    measure();
+    refill();
+  }
+
+  /* ---------- events ---------- */
+  trayEl.addEventListener("pointerdown", onDown);
+  boardEl.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+  restartBtn.addEventListener("click", function () {
+    ctx();
+    startGame();
+  });
+  againBtn.addEventListener("click", function () {
+    ctx();
+    startGame();
+  });
+
+  soundBtn.addEventListener("click", function () {
+    soundOn = !soundOn;
+    soundBtn.textContent = soundOn ? "Звук вкл" : "Звук выкл";
+    soundBtn.setAttribute("aria-pressed", String(soundOn));
+    soundBtn.classList.toggle("off", !soundOn);
+    if (soundOn) { ctx(); sfxPlace(); }
+  });
+
+  let resizeTimer = null;
+  function relayout() {
+    measure();
+    renderTray();
+  }
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(relayout, 120);
+  });
+  window.addEventListener("orientationchange", function () {
+    setTimeout(relayout, 260);
+  });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () {
+      if (!drag) {
+        measure();
+        renderTray();
+      }
+    }).observe(boardEl);
+  }
+
+  state.best = loadBest();
+  startGame();
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  });
+}
+</script>
+</body>
+</html>

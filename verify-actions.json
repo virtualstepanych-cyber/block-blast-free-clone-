@@ -1,0 +1,7 @@
+[
+  {"type":"click","selector":"#restart"},
+  {"type":"assert","selector":"#score","property":"text","equals":"0"},
+  {"type":"assert","selector":"#overlay","property":"hidden","equals":"true"},
+  {"type":"click","selector":"#sound"},
+  {"type":"assert","selector":"#sound","property":"text","equals":"Звук выкл"}
+]
